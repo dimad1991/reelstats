@@ -24,25 +24,43 @@ const server = http.createServer((req, res) => {
   res.end('Bot is running');
 });
 
-// Explicitly bind to 0.0.0.0 to listen on all network interfaces
-const PORT = process.env.PORT || 3000;
-
-// Initialize bot before starting the server
-console.log('Starting Telegram bot initialization...');
-log('Starting Telegram bot initialization...');
-
-const bot = createBot();
-
-// Start server after bot initialization
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on port ${PORT}`);
-  log(`Server is running on port ${PORT}`);
-  console.log('Bot and server are both running');
-  log('Bot and server are both running');
+// Initialize bot with polling disabled initially
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
+  polling: false
 });
 
-// Log startup information
-log('Debug logging enabled');
+// Explicitly bind to PORT from environment or fallback to 3000
+const PORT = process.env.PORT || 3000;
+
+// Start server and bot
+server.listen(PORT, '0.0.0.0', async () => {
+  console.log(`Server is running on port ${PORT}`);
+  log(`Server is running on port ${PORT}`);
+  
+  try {
+    // Start bot polling after server is running
+    await bot.startPolling();
+    console.log('Bot polling started successfully');
+    log('Bot polling started successfully');
+    
+    // Set up message handlers
+    setupMessageHandlers(bot);
+    
+    console.log('Bot and server are both running');
+    log('Bot and server are both running');
+  } catch (error) {
+    console.error('Failed to start bot polling:', error);
+    log('Failed to start bot polling:', error);
+    process.exit(1);
+  }
+});
+
+// Error handling for server
+server.on('error', (error) => {
+  console.error('Server error:', error);
+  log('Server error:', error);
+  process.exit(1);
+});
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000;
@@ -104,108 +122,6 @@ const removeBotLock = () => {
     }
   } catch (error) {
     log('Error removing lock file:', error);
-  }
-};
-
-const createBot = (retryCount = 0) => {
-  try {
-    if (checkBotLock()) {
-      log('Another bot instance is already running');
-      process.exit(1);
-    }
-
-    log('Initializing bot...');
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    
-    if (!token) {
-      log('TELEGRAM_BOT_TOKEN is not set in .env file');
-      process.exit(1);
-    }
-
-    createBotLock();
-
-    const bot = new TelegramBot(token, { 
-      polling: true,
-      webHook: false,
-      request: {
-        timeout: 60000
-      }
-    });
-
-    log('Bot initialized successfully');
-
-    bot.on('polling_error', async (error) => {
-      log('Polling error:', error.message);
-      log('Full error:', error);
-
-      if (error.code === 'ETELEGRAM' && error.message.includes('404')) {
-        log('Invalid bot token. Please check your TELEGRAM_BOT_TOKEN in .env');
-        removeBotLock();
-        process.exit(1);
-      }
-
-      if (error.code === 'ETELEGRAM' && error.message.includes('409')) {
-        log('Detected another bot instance. Stopping polling...');
-        await bot.stopPolling();
-        removeBotLock();
-        log('Waiting before restart...');
-        setTimeout(async () => {
-          log('Attempting to restart polling...');
-          createBotLock();
-          await bot.startPolling();
-        }, 5000);
-        return;
-      }
-
-      if (error.code === 'EFATAL' && retryCount < MAX_RETRIES) {
-        const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
-        log(`Retrying connection in ${delay/1000} seconds...`);
-        
-        setTimeout(() => {
-          bot.stopPolling();
-          removeBotLock();
-          createBot(retryCount + 1);
-        }, delay);
-      }
-    });
-
-    process.on('SIGINT', () => {
-      log('Received SIGINT. Cleaning up...');
-      bot.stopPolling();
-      removeBotLock();
-      process.exit(0);
-    });
-
-    process.on('SIGTERM', () => {
-      log('Received SIGTERM. Cleaning up...');
-      bot.stopPolling();
-      removeBotLock();
-      process.exit(0);
-    });
-
-    // Signal to PM2 that we're ready
-    if (process.send) {
-      process.send('ready');
-    }
-
-    // Set up message handlers after bot is initialized
-    setupMessageHandlers(bot);
-
-    return bot;
-  } catch (error) {
-    log('Error creating bot:', error);
-    removeBotLock();
-    if (retryCount < MAX_RETRIES) {
-      const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
-      log(`Retrying bot creation in ${delay/1000} seconds...`);
-      
-      setTimeout(() => {
-        createBot(retryCount + 1);
-      }, delay);
-    } else {
-      log('Max retries reached. Please check your configuration.');
-      process.exit(1);
-    }
   }
 };
 
@@ -573,8 +489,3 @@ function setupMessageHandlers(bot) {
     }
   });
 }
-
-// Initialize bot with immediate logging
-const bot = createBot();
-log('Bot initialization completed');
-console.log('Bot is ready to receive messages');
