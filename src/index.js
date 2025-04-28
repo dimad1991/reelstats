@@ -9,6 +9,15 @@ import http from 'node:http';
 const log = debug('telegram-bot');
 dotenv.config();
 
+// Log environment check
+log('Checking environment variables...');
+if (!process.env.TELEGRAM_BOT_TOKEN) {
+  console.error('ERROR: TELEGRAM_BOT_TOKEN is not set');
+  log('ERROR: TELEGRAM_BOT_TOKEN is not set');
+  process.exit(1);
+}
+log('Environment variables checked successfully');
+
 // Create HTTP server for Render
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -17,12 +26,22 @@ const server = http.createServer((req, res) => {
 
 // Explicitly bind to 0.0.0.0 to listen on all network interfaces
 const PORT = process.env.PORT || 3000;
+
+// Initialize bot before starting the server
+console.log('Starting Telegram bot initialization...');
+log('Starting Telegram bot initialization...');
+
+const bot = createBot();
+
+// Start server after bot initialization
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
+  log(`Server is running on port ${PORT}`);
+  console.log('Bot and server are both running');
+  log('Bot and server are both running');
 });
 
 // Log startup information
-console.log('Starting Telegram bot...');
 log('Debug logging enabled');
 
 const MAX_RETRIES = 3;
