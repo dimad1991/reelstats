@@ -4,9 +4,22 @@ import fetch from 'node-fetch';
 import fs from 'fs';
 import path from 'path';
 import debug from 'debug';
+import http from 'node:http';
 
 const log = debug('telegram-bot');
 dotenv.config();
+
+// Create HTTP server for Render
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Bot is running');
+});
+
+// Explicitly bind to 0.0.0.0 to listen on all network interfaces
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on port ${PORT}`);
+});
 
 // Log startup information
 console.log('Starting Telegram bot...');
